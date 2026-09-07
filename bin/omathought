@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# Omathought's filesystem side. The QML overlay owns the UI and the Voxtype
+# lifecycle; every read and write of a note goes through here, so the rules
+# about where notes live and what a note file looks like exist in exactly one
+# place — and can be exercised from a terminal without the shell running.
+#
+#   omathought dir                  print the notes directory
+#   omathought save <text>          write a new note, print its id
+#   omathought list                 print [{id, created, body}] as JSON
+#   omathought body <id>            print one note's body
+#   omathought update <id> <text>   replace a note's body, keeping `created`
+#   omathought delete <id>          remove a note
+#
+# Text arrives as a single argv element, never on stdin and never through a
+# shell string, so a dictated "rm -rf" is just words.
+
+set -euo pipefail
+
+readonly SETTINGS="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/settings/omathought.json"
+readonly DEFAULT_DIR="$HOME/Documents/Thoughts"
+
+die() {
+  printf 'omathought: %s\n' "$1" >&2
+  exit 1
+}
+
+# The notes directory is read from the settings file when present, so it can be
+# repointed at a synced folder without touching this script. `~` is expanded
+# because a hand-edited JSON file is the obvious place to write one.
+notes_dir() {
+  local dir=""
+  if [[ -f $SETTINGS ]]; then
+    dir=$(jq -r '.notesDir // empty' "$SETTINGS" 2>/dev/null || true)
+  fi
+  [[ -n $dir ]] || dir=$DEFAULT_DIR
+  [[ $dir == "~"* ]] && dir="$HOME${dir:1}"
+  printf '%s' "$dir"
+}
+
+ensure_dir() {
+  local dir
+  dir=$(notes_dir)
+  mkdir -p -- "$dir" || die "cannot create notes directory: $dir"
+  printf '%s' "$dir"
+}
+
+# Ids are minted from the clock, so two memos dictated inside the same second
+# would collide. Rather than overwrite, walk a suffix until the name is free.
+mint_id() {
+  local dir=$1 base id
+  base=$(date +%Y%m%d-%H%M%S)
+  id=$base
+  local n=2
+  while [[ -e "$dir/$id.md" ]]; do
+    id="$base-$n"
+    n=$((n + 1))
+  done
+  printf '%s' "$id"
+}
+
+# Reject anything that is not a name this script itself would have minted. The
+# id reaches us from the overlay and is about to be pasted into a path, so path
+# separators and traversal are refused outright instead of sanitized.
+validate_id() {
+  local id=$1
+  [[ $id =~ ^[0-9]{8}-[0-9]{6}(-[0-9]+)?$ ]] || die "invalid note id: $id"
+}
+
+note_path() {
+  validate_id "$1"
+  printf '%s/%s.md' "$(notes_dir)" "$1"
+}
+
+# Write through a temp file in the destination directory and rename, so a note
+# is either wholly present or wholly absent — a reader (this script's own
+# `list`, or an editor watching the folder) never catches a half-written file.
+write_atomic() {
+  local target=$1 content=$2 tmp
+  tmp=$(mktemp "${target%/*}/.omathought.XXXXXX") || die "cannot create temp file"
+  # Callers pass the rendered note through `$(...)`, which eats the trailing
+  # newline; put exactly one back so the file is well-formed text.
+  printf '%s\n' "$content" >"$tmp"
+  mv -f -- "$tmp" "$target"
+}
+
+render_note() {
+  local created=$1 body=$2
+  printf -- '---\ncreated: %s\n---\n\n%s\n' "$created" "$body"
+}
+
+cmd_dir() {
+  ensure_dir
+  printf '\n'
+}
+
+cmd_save() {
+  local text=${1-}
+  [[ -n ${text//[[:space:]]/} ]] || die "refusing to save an empty note"
+
+  local dir id
+  dir=$(ensure_dir)
+  id=$(mint_id "$dir")
+  write_atomic "$dir/$id.md" "$(render_note "$(date -Is)" "$text")"
+  printf '%s\n' "$id"
+}
+
+cmd_update() {
+  local id=${1-} text=${2-}
+  [[ -n $id ]] || die "update needs a note id"
+  local path
+  path=$(note_path "$id")
+  [[ -f $path ]] || die "no such note: $id"
+
+  # An edit keeps the original creation stamp; only the body is replaced. If the
+  # header was lost to an external editor, fall back to the id's own instant.
+  local created
+  created=$(sed -n 's/^created:[[:space:]]*//p' "$path" | head -n1)
+  [[ -n $created ]] || created=$(date -Is)
+
+  if [[ -z ${text//[[:space:]]/} ]]; then
+    die "refusing to empty a note; delete it instead"
+  fi
+  write_atomic "$path" "$(render_note "$created" "$text")"
+  printf '%s\n' "$id"
+}
+
+cmd_delete() {
+  local id=${1-}
+  [[ -n $id ]] || die "delete needs a note id"
+  local path
+  path=$(note_path "$id")
+  [[ -f $path ]] || die "no such note: $id"
+  rm -f -- "$path"
+  printf '%s\n' "$id"
+}
+
+# Strip the frontmatter block and hand back the body alone. Only a header at the
+# very top counts, so a "---" rule inside a dictated note survives.
+#
+# The blank line separating header from body is part of the format, not part of
+# the note: without dropping it here, every edit would read it back, re-render
+# it under a fresh separator, and grow the note by one blank line per save.
+strip_frontmatter() {
+  awk '
+    NR == 1 && $0 == "---" { inHeader = 1; next }
+    inHeader && $0 == "---" { inHeader = 0; justClosed = 1; next }
+    inHeader { next }
+    justClosed { justClosed = 0; if ($0 == "") next }
+    { print }
+  ' "$1"
+}
+
+read_created() {
+  sed -n 's/^created:[[:space:]]*//p' "$1" | head -n1
+}
+
+cmd_body() {
+  local id=${1-}
+  [[ -n $id ]] || die "body needs a note id"
+  local path
+  path=$(note_path "$id")
+  [[ -f $path ]] || die "no such note: $id"
+  strip_frontmatter "$path"
+}
+
+# One JSON array of every note. jq does the encoding, so a note containing
+# quotes, backslashes or newlines cannot break the document the overlay parses.
+cmd_list() {
+  local dir
+  dir=$(ensure_dir)
+
+  local first=1
+  printf '['
+  local path id created body
+  # Reverse-sorted by name, which is reverse-chronological: the overlay sorts
+  # again, but this keeps `omathought list | jq` useful on its own.
+  while IFS= read -r path; do
+    [[ -f $path ]] || continue
+    id=${path##*/}
+    id=${id%.md}
+    [[ $id =~ ^[0-9]{8}-[0-9]{6}(-[0-9]+)?$ ]] || continue
+
+    created=$(read_created "$path")
+    body=$(strip_frontmatter "$path")
+
+    [[ $first -eq 1 ]] || printf ','
+    first=0
+    jq -nc --arg id "$id" --arg created "$created" --arg body "$body" \
+      '{id: $id, created: $created, body: $body}'
+  done < <(find "$dir" -maxdepth 1 -type f -name '*.md' | sort -r)
+  printf ']\n'
+}
+
+main() {
+  local cmd=${1-}
+  [[ -n $cmd ]] || die "usage: omathought {dir|save|list|body|update|delete}"
+  shift || true
+
+  command -v jq >/dev/null || die "jq is required but not installed"
+
+  case $cmd in
+    dir)    cmd_dir ;;
+    save)   cmd_save "$@" ;;
+    list)   cmd_list ;;
+    body)   cmd_body "$@" ;;
+    update) cmd_update "$@" ;;
+    delete) cmd_delete "$@" ;;
+    *)      die "unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"
