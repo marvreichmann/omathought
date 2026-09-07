@@ -7,6 +7,8 @@ An Omarchy shell plugin that turns [Voxtype](https://voxtype.io/) push-to-talk
 into a note library: a capture card at the bottom of the screen while you speak,
 and a browser down the left-hand side for everything you have said so far.
 
+![The note browser and the capture card](preview.png)
+
 ## What it does
 
 **Capture** — hold `F10`. A card appears at the bottom of the screen and
@@ -88,6 +90,27 @@ Universal paste.
 The two `F10` lines are the whole push-to-talk mechanism. The second one, with
 `release = true`, is what makes it hold-to-talk instead of a toggle; without it
 recording never stops.
+
+## Remove
+
+```sh
+omarchy plugin remove com.github.marvreichmann.omathought
+```
+
+Then delete the three `o.bind` lines from `~/.config/hypr/bindings.lua` and
+reload with `hyprctl reload`. Removing the plugin does not unbind them, and a
+binding left pointing at an absent plugin does nothing silently.
+
+Your notes are left alone — Omathought never deletes the notes directory. To
+remove them too:
+
+```sh
+rm -rf ~/Documents/Thoughts                          # or your own notesDir
+rm -f ~/.local/state/omarchy/settings/omathought.json
+```
+
+Nothing else is touched: no packages are installed, no services registered, and
+Voxtype's own configuration is never modified.
 
 ## How it works
 

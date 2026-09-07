@@ -6,13 +6,6 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- Both surfaces now open on the monitor Hyprland has focused. They previously
-  opened on whichever screen Quickshell enumerates first, so on a multi-monitor
-  setup a keypress appeared to do nothing while the card or the browser was up
-  on another screen entirely.
-
 ## [0.1.0] - 2026-09-07
 
 ### Added
@@ -33,6 +26,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   notes somewhere else.
 - `bin/omathought`, the helper the plugin drives, usable on its own from a
   terminal for `list`, `save`, `body`, `update` and `delete`.
+
+Both surfaces open on the monitor Hyprland has focused, rather than on whichever
+screen Quickshell enumerates first — on a multi-monitor setup the latter makes a
+keypress look like it did nothing while the card is up on another screen.
 
 [Unreleased]: https://github.com/marvreichmann/omathought/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/marvreichmann/omathought/releases/tag/v0.1.0
