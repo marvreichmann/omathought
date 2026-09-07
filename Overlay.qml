@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
@@ -61,6 +62,32 @@ Item {
   readonly property string fontFamily: Style.font.menuFamily
   readonly property int contentMargin: Style.spacing.panelPadding
 
+  // ------------------------------------------------------------- monitors
+
+  // Which output each surface is on. A PanelWindow with no `screen` lands on
+  // the first one Quickshell enumerates, so on a multi-monitor desk a summoned
+  // panel opens on some other screen than the one being used — it is not
+  // missing, it is two monitors away.
+  //
+  // Resolved once when a surface opens, not bound live: a card must not hop
+  // monitors because focus moved while it was up.
+  property var captureScreen: null
+  property var browseScreen: null
+
+  function focusedScreen() {
+    var monitor = Hyprland.focusedMonitor
+    var name = monitor ? String(monitor.name || "") : ""
+    if (!name) return null
+
+    var screens = Quickshell.screens
+    for (var i = 0; i < screens.length; i++) {
+      if (String(screens[i].name) === name) return screens[i]
+    }
+    // Hyprland named an output Quickshell does not know yet. Null falls back to
+    // the default screen, which is better than refusing to show anything.
+    return null
+  }
+
   // ============================================================== plugin API
 
   // The shell calls these; `summon` routes its payload to open().
@@ -97,6 +124,7 @@ Item {
     // the sentence is lost.
     if (root.captureOpen && (root.phase === "recording" || root.phase === "transcribing")) return
 
+    root.captureScreen = root.focusedScreen()
     root.captureOpen = true
     root.phase = "recording"
     root.draft = ""
@@ -154,6 +182,7 @@ Item {
   // ============================================================== browsing
 
   function openBrowser() {
+    root.browseScreen = root.focusedScreen()
     root.browseOpen = true
     root.editing = false
     root.pendingDelete = ""
@@ -313,6 +342,7 @@ Item {
   PanelWindow {
     id: capturePanel
     visible: root.captureOpen
+    screen: root.captureScreen
     // Anchored on three sides: the card sits at the bottom, but the surface
     // spans the screen so the scrim covers it and a click anywhere dismisses.
     anchors { top: true; bottom: true; left: true; right: true }
@@ -434,6 +464,7 @@ Item {
   PanelWindow {
     id: browsePanel
     visible: root.browseOpen
+    screen: root.browseScreen
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "omathought-browser"

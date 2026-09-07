@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Both surfaces now open on the monitor Hyprland has focused. They previously
+  opened on whichever screen Quickshell enumerates first, so on a multi-monitor
+  setup a keypress appeared to do nothing while the card or the browser was up
+  on another screen entirely.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added
