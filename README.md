@@ -8,7 +8,7 @@ into a note library: a capture card at the bottom of the screen while you speak,
 and a browser down the left-hand side for everything you have said so far. You
 pick the two keys from its bar panel; it writes them for you.
 
-![The note browser and the capture card](preview.png)
+![The note browser, the setup panel, and the capture card](preview.png)
 
 ## What it does
 
