@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An Omarchy shell plugin (QML / Quickshell) that captures Voxtype push-to-talk
 dictation into a library of Markdown notes. There is no build step — the plugin
-is `Overlay.qml`, `Model.js` and `bin/omathought` plus `manifest.json`.
+is `Overlay.qml`, `BarWidget.qml`, `Panel.qml`, `Model.js` and `bin/omathought`
+plus `manifest.json`.
 `README.md` documents the user-facing behaviour and `CHANGELOG.md` the release
 history.
 
@@ -50,9 +51,18 @@ Testing the QML requires copying everything to the installed location, whose
 folder name must match `manifest.json`'s `id`:
 
 ```sh
-cp -a manifest.json Overlay.qml Model.js README.md LICENSE bin \
+cp manifest.json *.qml Model.js README.md LICENSE bin/omathought \
   ~/.config/omarchy/plugins/com.github.marvreichmann.omathought/
 ```
+
+**Never `cp -a` into the plugin directory.** `-a` preserves the source mtime,
+and Qt's compiled-QML disk cache keys on mtime: the shell then reuses a stale
+compilation unit and reports errors from code that is no longer on disk. It
+surfaces as nonsense — `File name case mismatch` on a file whose name is
+perfectly correct, or `Cannot assign to non-existent property "x"` naming a
+property the current file does not assign. `touch` on the installed files clears
+it. To empty a poisoned cache, remove the files under
+`~/.cache/quickshell/qmlcache` and restart the shell.
 
 The shell watches local plugins and reloads on change, but a failed load is not
 retried until a full rescan, so after fixing a QML syntax error:
@@ -96,7 +106,7 @@ never rendered.
 
 ## Architecture
 
-Three files, and the split is about what can be tested:
+Five files, and the split is about what can be tested:
 
 - **`bin/omathought`** — every read and write of a note. Bash, argv-only, no
   stdin: the QML passes transcripts as a single argv element so dictated text is
@@ -107,6 +117,12 @@ Three files, and the split is about what can be tested:
   heading-plus-note row model, filtering, and cursor movement. No IO.
 - **`Overlay.qml`** — both layer surfaces, the Voxtype lifecycle, and the IPC
   handler. Rendering and process spawning only; decisions belong in `Model.js`.
+- **`BarWidget.qml`** — the bar icon, and the only reason an unconfigured
+  install is findable: the plugin cannot ship a keybinding, so without an icon a
+  fresh install has no surface anywhere and reads as broken. Carries a dot while
+  keys are unset.
+- **`Panel.qml`** — the setup surface behind that icon. Records a chord and has
+  the helper write it; also the shortcut to browse or capture by mouse.
 
 ### Invariants that break things when violated
 
@@ -142,6 +158,15 @@ Three files, and the split is about what can be tested:
   refused, not sanitized.
 - An edit that empties a note is refused rather than saved. Silently turning a
   save into a delete is the one destructive thing the editor could do.
+- `helperPath()` is a function, not a derived property. `manifest` is injected
+  after construction, and a binding derived from it, read inside
+  `onManifestChanged`, still observes the pre-change value — which resolved to a
+  bare `/bin/omathought`, exited 127, and made the plugin report its own working
+  keybindings missing.
+- The panel never edits `bindings.lua` outside its `BEGIN`/`END` block, takes a
+  single backup before the first write, and reverts if `hyprctl configerrors`
+  reports something new. Chords are validated against a strict shape before
+  reaching a Lua string.
 
 ## Shell APIs this plugin relies on
 
@@ -150,7 +175,18 @@ Three files, and the split is about what can be tested:
   into. It is expected to define `open(payloadJson)`, `close()` and `toggle()`.
   `omarchy-shell shell summon <id> '<json>'` routes its payload to `open`.
 - **`manifest.__sourceDir`** is the plugin's own directory on disk, stamped in by
-  `PluginRegistry`. It is the only way to find bundled files like `bin/`.
+  `PluginRegistry`. It is the only way to find bundled files like `bin/`, and it
+  is injected *after* construction — see the invariant about `helperPath()`.
+  Bar-hosted components are never given it at all, so `Panel.qml` resolves the
+  helper with `Qt.resolvedUrl` instead.
+- **A bar popup is a `Panel` wrapping a `KeyboardPanel` wrapping a
+  `PanelKeyCatcher`.** `KeyboardPanel` alone has no `moduleName`, `ipcTarget`,
+  `opened` or `toggle`, so a widget's `panelLoader.item.toggle()` finds nothing
+  and the panel never opens. screenshotx's `Panel.qml` is the reference.
+- **`omarchy-shell shell summon <plugin-id>` is ambiguous for a plugin with both
+  `overlay` and `bar-widget` kinds** — it routes to the overlay. Reach a
+  specific behaviour through the plugin's own `IpcHandler` target instead, which
+  is what the keybindings do.
 - A plugin gets **one entry point per kind**, so two surfaces means one overlay
   hosting two `PanelWindow`s — not two overlay entries.
 - A non-bar plugin is *enabled* by appearing in the top-level `plugins[]` array

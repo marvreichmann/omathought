@@ -23,7 +23,16 @@ Item {
   property var manifest: null
 
   readonly property string pluginId: (manifest && manifest.id) || "com.github.marvreichmann.omathought"
-  readonly property string helper: ((manifest && manifest.__sourceDir) || "") + "/bin/omathought"
+
+  // Resolved on call rather than held as a binding. `manifest` is injected by
+  // the loader after construction, and a derived binding read from inside
+  // `onManifestChanged` can still observe the pre-change value — which yielded
+  // a bare "/bin/omathought", a silent exit 127, and a plugin that reported its
+  // own keybindings missing while they were sitting there working.
+  function helperPath() {
+    var dir = (manifest && manifest.__sourceDir) || ""
+    return dir + "/bin/omathought"
+  }
 
   // ------------------------------------------------------------- capture
 
@@ -163,7 +172,7 @@ Item {
     if (!Model.isSaveable(text)) { root.dismissCapture(); return }
 
     root.phase = "saving"
-    saveProcess.command = ["bash", root.helper, "save", text]
+    saveProcess.command = ["bash", root.helperPath(), "save", text]
     saveProcess.running = true
   }
 
@@ -232,7 +241,7 @@ Item {
     // here rather than silently dropped by the helper.
     if (!Model.isSaveable(text)) { root.cancelEdit(); return }
 
-    updateProcess.command = ["bash", root.helper, "update", note.id, text]
+    updateProcess.command = ["bash", root.helperPath(), "update", note.id, text]
     updateProcess.running = true
     root.editing = false
     Qt.callLater(function () { browseKeys.forceActiveFocus() })
@@ -259,7 +268,7 @@ Item {
     // Move the cursor before the list reloads, so it lands where the deleted
     // row was rather than snapping back to the top.
     root.selectedId = Model.selectionAfterDelete(root.visibleNotes, id)
-    deleteProcess.command = ["bash", root.helper, "delete", id]
+    deleteProcess.command = ["bash", root.helperPath(), "delete", id]
     deleteProcess.running = true
   }
 
@@ -290,7 +299,7 @@ Item {
 
   Process {
     id: listProcess
-    command: ["bash", root.helper, "list"]
+    command: ["bash", root.helperPath(), "list"]
     stdout: StdioCollector { onStreamFinished: root.consumeList(this.text) }
   }
 

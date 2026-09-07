@@ -10,14 +10,22 @@
 #   omathought body <id>            print one note's body
 #   omathought update <id> <text>   replace a note's body, keeping `created`
 #   omathought delete <id>          remove a note
+#   omathought keys                 print the keybindings to add to Hyprland
+#   omathought keys --check         exit 0 if they are wired up, 1 if not
 #
 # Text arrives as a single argv element, never on stdin and never through a
 # shell string, so a dictated "rm -rf" is just words.
+#
+# This script never edits Hyprland's configuration. Choosing a key is the user's
+# call — which combinations are free differs per machine — so `keys` prints the
+# lines and the user pastes them.
 
 set -euo pipefail
 
 readonly SETTINGS="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/settings/omathought.json"
 readonly DEFAULT_DIR="$HOME/Documents/Thoughts"
+readonly HYPR_DIR="$HOME/.config/hypr"
+readonly IPC_TARGET="omathought"
 
 die() {
   printf 'omathought: %s\n' "$1" >&2
@@ -191,15 +199,182 @@ cmd_list() {
   printf ']\n'
 }
 
+# ---------------------------------------------------------------- keybindings
+
+# Omathought has no bar widget: without a keybinding there is nothing to click
+# and nothing to see, so an unbound install looks like a broken one. Everything
+# below exists to make that state visible and fixable.
+
+# A method is wired up if any Hyprland config file calls it on this plugin's IPC
+# target. Matching the call rather than a marker comment means a hand-written
+# binding on a different key counts too — the user's own choice of key is the
+# point, so only the wiring is checked, never the combination.
+binding_present() {
+  grep -rqs -- "$IPC_TARGET $1" "$HYPR_DIR" 2>/dev/null
+}
+
+bindings_ready() {
+  binding_present captureStart && binding_present captureStop \
+    && { binding_present toggleBrowse || binding_present browse; }
+}
+
+readonly BINDINGS="$HYPR_DIR/bindings.lua"
+readonly BLOCK_BEGIN="-- BEGIN com.github.marvreichmann.omathought"
+readonly BLOCK_END="-- END com.github.marvreichmann.omathought"
+
+# The chord as Omarchy writes it: "F10", "SUPER + SHIFT + V". Anything outside
+# this shape is refused rather than escaped, because it is about to be written
+# into a Lua string in the user's compositor config.
+valid_chord() {
+  [[ $1 =~ ^([A-Za-z0-9_]+)([[:space:]]*\+[[:space:]]*[A-Za-z0-9_]+)*$ ]]
+}
+
+# Read the chord currently bound to a slot, straight out of the live config, so
+# the panel shows what Hyprland actually has rather than a cached copy.
+read_slot() {
+  local method
+  case $1 in
+    capture) method=captureStart ;;
+    browse)  method=toggleBrowse ;;
+    *) return 1 ;;
+  esac
+  [[ -f $BINDINGS ]] || return 0
+  sed -n "s/^o\.bind(\"\([^\"]*\)\".*$IPC_TARGET $method\".*/\1/p" "$BINDINGS" | head -n1
+}
+
+render_block() {
+  local capture=$1 browse=$2
+  printf '%s\n' "$BLOCK_BEGIN"
+  if [[ -n $capture ]]; then
+    # Both lines, always. The release binding is what makes the key
+    # hold-to-talk; written on its own, the press line records forever.
+    printf 'o.bind("%s", "Capture a thought", "omarchy-shell -q %s captureStart")\n' "$capture" "$IPC_TARGET"
+    printf 'o.bind("%s", "Capture a thought (release)", "omarchy-shell -q %s captureStop", { release = true })\n' "$capture" "$IPC_TARGET"
+  fi
+  [[ -n $browse ]] && \
+    printf 'o.bind("%s", "Browse thoughts", "omarchy-shell -q %s toggleBrowse")\n' "$browse" "$IPC_TARGET"
+  printf '%s\n' "$BLOCK_END"
+}
+
+# Replace the managed block, or append one, leaving every other line untouched.
+write_block() {
+  local capture=$1 browse=$2
+
+  [[ -f $BINDINGS ]] || die "not found: $BINDINGS"
+  [[ -L $BINDINGS ]] && die "refusing to write through a symlink: $BINDINGS"
+  [[ -w $BINDINGS ]] || die "not writable: $BINDINGS"
+
+  # One backup, taken before the first write and never overwritten: it preserves
+  # the file as it was before this plugin ever touched it. Stamping a new copy
+  # per write would bury that original under a pile of near-identical files.
+  local backup tmp
+  backup="$BINDINGS.omathought-backup"
+  [[ -e $backup ]] || cp -p -- "$BINDINGS" "$backup"
+
+  tmp=$(mktemp "$HYPR_DIR/.omathought-bindings.XXXXXX") || die "cannot create temp file"
+  if grep -qF -- "$BLOCK_BEGIN" "$BINDINGS"; then
+    awk -v b="$BLOCK_BEGIN" -v e="$BLOCK_END" -v repl="$(render_block "$capture" "$browse")" '
+      $0 == b { print repl; skip = 1; next }
+      $0 == e { skip = 0; next }
+      !skip   { print }
+    ' "$BINDINGS" >"$tmp"
+  else
+    cat -- "$BINDINGS" >"$tmp"
+    printf '\n' >>"$tmp"
+    render_block "$capture" "$browse" >>"$tmp"
+  fi
+
+  mv -f -- "$tmp" "$BINDINGS"
+
+  # Reload and check. Hyprland reports config errors as text; if the write
+  # introduced one, put the original back rather than leaving the user with a
+  # broken compositor config they did not edit.
+  if command -v hyprctl >/dev/null; then
+    hyprctl reload >/dev/null 2>&1 || true
+    local errors
+    errors=$(hyprctl configerrors 2>/dev/null | tr -d '[:space:]')
+    if [[ -n $errors && $errors != "nonexistent" ]]; then
+      cp -p -- "$backup" "$BINDINGS"
+      hyprctl reload >/dev/null 2>&1 || true
+      die "hyprland rejected the change; restored from $backup"
+    fi
+  fi
+  printf 'ok\n'
+}
+
+cmd_keys() {
+  if [[ ${1-} == --check ]]; then
+    if bindings_ready; then
+      echo "keybindings: wired up"
+      return 0
+    fi
+    # Report what is missing, so a half-finished paste is obvious. The release
+    # binding is the one people leave out, and without it push-to-talk records
+    # forever.
+    binding_present captureStart || echo "missing: capture (press)"
+    binding_present captureStop  || echo "missing: capture (release) — without this, recording never stops"
+    binding_present toggleBrowse || binding_present browse || echo "missing: browse"
+    return 1
+  fi
+
+  # What the panel reads to render its two rows.
+  if [[ ${1-} == --json ]]; then
+    jq -nc --arg capture "$(read_slot capture)" --arg browse "$(read_slot browse)" \
+      '{capture: $capture, browse: $browse}'
+    return 0
+  fi
+
+  # `--set <slot> <chord>` and `--clear <slot>` rewrite the managed block. Both
+  # keep the other slot exactly as it is, so setting one key never silently
+  # drops the other.
+  if [[ ${1-} == --set || ${1-} == --clear ]]; then
+    local action=$1 slot=${2-} chord=${3-}
+    [[ $slot == capture || $slot == browse ]] || die "slot must be 'capture' or 'browse'"
+
+    if [[ $action == --set ]]; then
+      [[ -n $chord ]] || die "--set needs a key combination"
+      valid_chord "$chord" || die "not a usable key combination: $chord"
+    else
+      chord=""
+    fi
+
+    local capture browse
+    capture=$(read_slot capture)
+    browse=$(read_slot browse)
+    [[ $slot == capture ]] && capture=$chord || browse=$chord
+    write_block "$capture" "$browse"
+    return 0
+  fi
+
+  cat <<'SNIPPET'
+Add these to ~/.config/hypr/bindings.lua, then run: hyprctl reload
+
+-- BEGIN com.github.marvreichmann.omathought
+o.bind("F10", "Capture a thought", "omarchy-shell -q omathought captureStart")
+o.bind("F10", "Capture a thought (release)", "omarchy-shell -q omathought captureStop", { release = true })
+o.bind("SUPER + SHIFT + V", "Browse thoughts", "omarchy-shell -q omathought toggleBrowse")
+-- END com.github.marvreichmann.omathought
+
+Both F10 lines are required. The second one, with `release = true`, is what
+makes the key hold-to-talk instead of a toggle; without it, recording never
+stops.
+
+Pick your own keys if these are taken — check with:
+  omarchy menu keybindings --print
+SUPER + V is NOT free: it is Omarchy's Universal paste.
+SNIPPET
+}
+
 main() {
   local cmd=${1-}
-  [[ -n $cmd ]] || die "usage: omathought {dir|save|list|body|update|delete}"
+  [[ -n $cmd ]] || die "usage: omathought {dir|save|list|body|update|delete|keys}"
   shift || true
 
   command -v jq >/dev/null || die "jq is required but not installed"
 
   case $cmd in
     dir)    cmd_dir ;;
+    keys)   cmd_keys "$@" ;;
     save)   cmd_save "$@" ;;
     list)   cmd_list ;;
     body)   cmd_body "$@" ;;

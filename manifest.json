@@ -9,9 +9,25 @@
   "homepage": "https://github.com/marvreichmann/omathought",
   "keepLoaded": true,
   "kinds": [
-    "overlay"
+    "overlay",
+    "bar-widget"
   ],
   "entryPoints": {
-    "overlay": "Overlay.qml"
+    "overlay": "Overlay.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omathought",
+    "description": "Push-to-talk voice notes and their keybindings.",
+    "category": "Productivity",
+    "aliases": [
+      "thoughts",
+      "notes",
+      "voice",
+      "dictation",
+      "voxtype"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }
