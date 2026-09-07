@@ -184,7 +184,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(340))
+    contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(content.implicitHeight)
 
     PanelKeyCatcher {
@@ -212,6 +212,19 @@ Panel {
                                 : (root.loaded ? "Ready" : "Checking...")
           foreground: root.needsSetup ? root.urgent : root.foreground
           fontFamily: root.fontFamily
+
+          iconComponent: Component {
+            OpticalGlyph {
+              // The same mark as the bar widget — the panel should look
+              // like what was clicked. Written literally: the surrogate-pair
+              // form is one digit away from a different glyph entirely.
+              text: "󰍯"
+              width: Style.font.display
+              height: Style.font.display
+              fontSize: Style.font.display
+              color: root.needsSetup ? root.urgent : root.foreground
+            }
+          }
         }
 
         // Shown until both keys exist. It is the first thing a new install
@@ -245,39 +258,43 @@ Panel {
 
         PanelSeparator { width: parent.width }
 
-        Item {
+        Row {
+          id: actions
           width: parent.width
-          height: actions.implicitHeight
+          spacing: Style.spacing.sm
 
-          Row {
-            id: actions
-            anchors.left: parent.left
-            spacing: Style.spacing.sm
-
-            Button {
-              text: "Browse notes"
-              bordered: true
-              enabled: !root.busy
-              onClicked: root.run("browse")
-            }
-
-            Button {
-              text: "Capture now"
-              bordered: true
-              enabled: !root.busy
-              onClicked: root.run("captureStart")
-            }
+          Button {
+            text: "Browse notes"
+            bordered: true
+            enabled: !root.busy
+            onClicked: root.run("browse")
           }
 
-          // Right-click on a row clears one key, but nothing announced that.
-          // This is the discoverable version, and it says "keys" rather than
-          // "notes" because removing a binding never touches a note.
           Button {
+            text: "Capture now"
+            bordered: true
+            enabled: !root.busy
+            onClicked: root.run("captureStart")
+          }
+        }
+
+        // Its own line: three labelled buttons do not fit the panel's width,
+        // and the third one silently overflowed off the right edge.
+        //
+        // Right-click on a row clears one key, but nothing announced that. This
+        // is the discoverable version, and it says "keys" rather than "notes"
+        // because removing a binding never touches a note.
+        Item {
+          width: parent.width
+          height: removeButton.implicitHeight
+          visible: root.captureChord !== "" || root.browseChord !== ""
+
+          Button {
+            id: removeButton
             anchors.right: parent.right
-            anchors.verticalCenter: actions.verticalCenter
             text: "Remove keys"
             bordered: true
-            enabled: !root.busy && (root.captureChord !== "" || root.browseChord !== "")
+            enabled: !root.busy
             foreground: root.urgent
             accent: root.urgent
             tooltipText: "Unbind both keys. The bar icon still opens this panel."
@@ -308,20 +325,23 @@ Panel {
     BorderSurface {
       anchors.fill: parent
       radius: Style.cornerRadius
-      // The resting-to-hover step for a set row is the whole point here. The
-      // system's normal and hover fills are 4% and 8%, which is invisible on a
-      // dark panel, so hover borrows the *selected* weight instead and leaves
-      // the accent tint to mark the row that is actually listening.
+      // The resting-to-hover step is the whole point here. The system's normal
+      // and hover fills are 4% and 8%, which on a dark panel is no change at
+      // all, so hover takes the selected weight *and* the accent border — the
+      // same pair the shell's own controls use for a focused row. Listening
+      // then separates itself by tinting the fill accent too.
       color: row.listening
-        ? Util.alpha(Color.accent, 0.18)
+        ? Util.alpha(Color.accent, 0.22)
         : (row.hot ? Style.selectedFillFor(root.foreground, Color.accent)
                    : (row.chord === "" ? Util.alpha(root.urgent, 0.08)
                                        : Style.normalFillFor(root.foreground, Color.accent)))
       // "selected" carries a zero border width in this theme, so a hovered or
-      // listening row keeps the hover-cursor border and changes only its tint.
+      // listening row keeps the hover-cursor width and changes only its colour.
+      // controlSpec resolves that colour from the argument passed as foreground,
+      // which is how hover gets an accent outline rather than a grey one.
       borderSpec: Border.controlSpec(row.hot ? "hover-cursor" : "normal",
-                                     row.listening ? Color.accent
-                                                   : (row.chord === "" ? root.urgent : root.foreground),
+                                     row.hot ? Color.accent
+                                             : (row.chord === "" ? root.urgent : root.foreground),
                                      Color.accent)
 
       Behavior on color {
