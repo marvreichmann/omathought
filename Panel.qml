@@ -184,7 +184,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Style.space(360))
     contentHeight: panel.fittedContentHeight(content.implicitHeight)
 
     PanelKeyCatcher {
@@ -215,9 +215,9 @@ Panel {
 
           iconComponent: Component {
             OpticalGlyph {
-              // The same mark as the bar widget — the panel should look
-              // like what was clicked. Written literally: the surrogate-pair
-              // form is one digit away from a different glyph entirely.
+              // The same mark as the bar widget - the panel should look like
+              // what was clicked. Written literally: the surrogate-pair form is
+              // one digit away from a different glyph entirely.
               text: "󰍯"
               width: Style.font.display
               height: Style.font.display
@@ -236,7 +236,7 @@ Panel {
           wrapMode: Text.Wrap
           textFormat: Text.PlainText
           text: "Omathought runs from two keys you choose. Click a row and press "
-              + "the combination you want. Nothing else on your system changes."
+              + "the combination you want."
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
@@ -246,31 +246,35 @@ Panel {
           width: parent.width
           slot: "capture"
           heading: "Hold to capture"
-          detail: "Hold it, speak, release. The transcript lands in a card you can edit before saving."
+          detail: "Hold to record, release to transcribe."
         }
 
         KeyRow {
           width: parent.width
           slot: "browse"
           heading: "Browse notes"
-          detail: "Opens the list of everything you have captured."
+          detail: "Opens everything you have captured."
         }
 
         PanelSeparator { width: parent.width }
 
+        // Two equal halves rather than two content-width buttons and a ragged
+        // gap: the panel reads as a column, so the actions line up with the
+        // rows above them instead of ending wherever their labels do.
         Row {
-          id: actions
           width: parent.width
           spacing: Style.spacing.sm
 
           Button {
-            text: "Browse notes"
+            width: (parent.width - Style.spacing.sm) / 2
+            text: "Open notes"
             bordered: true
             enabled: !root.busy
             onClicked: root.run("browse")
           }
 
           Button {
+            width: (parent.width - Style.spacing.sm) / 2
             text: "Capture now"
             bordered: true
             enabled: !root.busy
@@ -278,12 +282,9 @@ Panel {
           }
         }
 
-        // Its own line: three labelled buttons do not fit the panel's width,
-        // and the third one silently overflowed off the right edge.
-        //
-        // Right-click on a row clears one key, but nothing announced that. This
-        // is the discoverable version, and it says "keys" rather than "notes"
-        // because removing a binding never touches a note.
+        // Destructive and secondary, so it is unbordered and tinted rather than
+        // a third button competing with the pair above. Hidden outright when
+        // there is nothing bound to remove.
         Item {
           width: parent.width
           height: removeButton.implicitHeight
@@ -292,12 +293,12 @@ Panel {
           Button {
             id: removeButton
             anchors.right: parent.right
-            text: "Remove keys"
-            bordered: true
+            text: "Remove key bindings"
             enabled: !root.busy
             foreground: root.urgent
             accent: root.urgent
-            tooltipText: "Unbind both keys. The bar icon still opens this panel."
+            fontSize: Style.font.caption
+            tooltipText: "Unbind both. The bar icon still opens this panel."
             onClicked: root.clearChord("all")
           }
         }
@@ -305,8 +306,9 @@ Panel {
     }
   }
 
-  // One settable key: what it does, what it is bound to, and a click to change
-  // it. Right-click clears it.
+  // One settable key. Every line is single-height and elided, so nothing in
+  // here reflows when the text changes under the cursor - a wrapping detail
+  // line was pushing the whole panel around on hover.
   component KeyRow: Item {
     id: row
     required property string slot
@@ -315,8 +317,8 @@ Panel {
 
     readonly property string chord: row.slot === "capture" ? root.captureChord : root.browseChord
     readonly property bool listening: root.recording === row.slot
-    // A row is a button, and the only clue it is one used to be that it happens
-    // to sit under the cursor. `hot` drives every affordance below.
+    // A row is a button, and the only clue it was one used to be that it
+    // happens to sit under the cursor.
     readonly property bool hot: hover.hovered || row.listening
 
     implicitHeight: rowColumn.implicitHeight + Style.spacing.md * 2
@@ -325,11 +327,11 @@ Panel {
     BorderSurface {
       anchors.fill: parent
       radius: Style.cornerRadius
-      // The resting-to-hover step is the whole point here. The system's normal
-      // and hover fills are 4% and 8%, which on a dark panel is no change at
-      // all, so hover takes the selected weight *and* the accent border — the
-      // same pair the shell's own controls use for a focused row. Listening
-      // then separates itself by tinting the fill accent too.
+      // The resting-to-hover step is the point: the system's normal and hover
+      // fills are 4% and 8%, which on a dark panel is no change at all, so
+      // hover takes the selected weight and the accent border together - the
+      // shell's own focused-control pairing. Listening then separates itself
+      // by tinting the fill accent as well.
       color: row.listening
         ? Util.alpha(Color.accent, 0.22)
         : (row.hot ? Style.selectedFillFor(root.foreground, Color.accent)
@@ -337,8 +339,8 @@ Panel {
                                        : Style.normalFillFor(root.foreground, Color.accent)))
       // "selected" carries a zero border width in this theme, so a hovered or
       // listening row keeps the hover-cursor width and changes only its colour.
-      // controlSpec resolves that colour from the argument passed as foreground,
-      // which is how hover gets an accent outline rather than a grey one.
+      // controlSpec resolves that colour from the argument passed as
+      // foreground, which is how hover gets an accent outline, not a grey one.
       borderSpec: Border.controlSpec(row.hot ? "hover-cursor" : "normal",
                                      row.hot ? Color.accent
                                              : (row.chord === "" ? root.urgent : root.foreground),
@@ -369,13 +371,20 @@ Panel {
       width: parent.width - Style.spacing.md * 2
       spacing: Style.spacing.xxs
 
+      // Heading left, chord hard right, both single-line. The chord holds its
+      // position in every state and only changes colour, so the eye can rest
+      // on it while moving between rows.
       Item {
         width: parent.width
-        height: headingText.implicitHeight
+        height: Math.max(headingText.implicitHeight, chordText.implicitHeight)
 
         Text {
           id: headingText
           anchors.left: parent.left
+          anchors.right: chordText.left
+          anchors.rightMargin: Style.spacing.sm
+          anchors.verticalCenter: parent.verticalCenter
+          elide: Text.ElideRight
           textFormat: Text.PlainText
           text: row.heading
           color: root.foreground
@@ -383,56 +392,38 @@ Panel {
           font.pixelSize: Style.font.bodySmall
         }
 
-        // The bound key, and under the cursor the action that replaces it. The
-        // chord itself stays put and only dims, so the row does not reflow and
-        // the value never disappears from under the pointer.
-        Row {
+        Text {
+          id: chordText
           anchors.right: parent.right
-          spacing: Style.spacing.sm
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: row.listening ? "Press a key..." : root.label(row.chord)
+          color: row.listening || row.hot
+            ? Color.accent
+            : (row.chord === "" ? root.urgent : root.foreground)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
 
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            textFormat: Text.PlainText
-            visible: row.hot && !row.listening
-            opacity: visible ? 1 : 0
-            text: row.chord === "" ? "click to set" : "click to change"
-            color: Color.accent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-
-            Behavior on opacity {
-              NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
-          }
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            textFormat: Text.PlainText
-            text: row.listening ? "Press a key..." : root.label(row.chord)
-            color: row.listening ? Color.accent
-                                 : (row.chord === "" ? root.urgent : root.foreground)
-            opacity: (row.hot && !row.listening) ? 0.55 : 1.0
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-
-            Behavior on opacity {
-              NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
+          Behavior on color {
+            ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
           }
         }
       }
 
+      // One line, never wrapped, always present. The text swaps under the
+      // cursor to name what a click does; the height cannot change with it.
       Text {
         width: parent.width
-        wrapMode: Text.Wrap
+        wrapMode: Text.NoWrap
+        elide: Text.ElideRight
         textFormat: Text.PlainText
-        // Hovering swaps the description for the two things the row responds
-        // to. Right-click is otherwise undiscoverable.
         text: row.listening
           ? "Esc cancels."
-          : (row.hot && row.chord !== "" ? "Click to record a new key, right-click to clear it."
-                                         : row.detail)
-        color: row.listening || row.hot ? Qt.darker(root.foreground, 1.25) : root.dim
+          : (row.hot
+              ? (row.chord === "" ? "Click to set a key."
+                                  : "Click to change, right-click to clear.")
+              : row.detail)
+        color: row.hot ? Qt.darker(root.foreground, 1.2) : root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
 

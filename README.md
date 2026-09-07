@@ -5,14 +5,15 @@ finished deciding whether it was worth keeping.
 
 An Omarchy shell plugin that turns [Voxtype](https://voxtype.io/) push-to-talk
 into a note library: a capture card at the bottom of the screen while you speak,
-and a browser down the left-hand side for everything you have said so far.
+and a browser down the left-hand side for everything you have said so far. You
+pick the two keys from its bar panel; it writes them for you.
 
 ![The note browser and the capture card](preview.png)
 
 ## What it does
 
-**Capture** — hold `F10`. A card appears at the bottom of the screen and
-recording starts. Let go and Voxtype transcribes into the card, where the text
+**Capture** — hold your capture key. A card appears at the bottom of the screen
+and recording starts. Let go and Voxtype transcribes into the card, where the text
 sits as an ordinary editable field until you decide:
 
 - `Ctrl+Enter` saves it as a note
@@ -22,7 +23,7 @@ Nothing is written until you confirm, so a misfire costs one keystroke. The
 transcript is editable before saving — fixing a mangled word does not mean
 re-recording the sentence.
 
-**Browse** — press `Super+Shift+V`. A panel opens on the left with every note,
+**Browse** — press your browse key. A panel opens on the left with every note,
 newest first, grouped under Today / Yesterday / Earlier this week / by month.
 
 | Key | |
@@ -67,47 +68,74 @@ echo '{"notesDir": "~/Documents/Notes/voice"}' > ~/.local/state/omarchy/settings
   check with `voxtype setup check`
 - `jq`, present in a normal Omarchy install
 
-Voxtype's own `F9` cursor dictation is untouched; Omathought only adds `F10`.
+Voxtype's own `F9` cursor dictation is untouched — Omathought only adds the keys
+you choose.
 
 ## Install
 
 ```sh
 omarchy plugin add https://github.com/marvreichmann/omathought.git --enable
+omarchy bar put com.github.marvreichmann.omathought --section right
 ```
 
-Then add the keybindings to `~/.config/hypr/bindings.lua`:
+A microphone icon appears in the bar, carrying a dot while no keys are set.
+Click it and the panel opens:
 
-```lua
-o.bind("F10", "Capture a thought", "omarchy-shell -q omathought captureStart")
-o.bind("F10", "Capture a thought (release)", "omarchy-shell -q omathought captureStop", { release = true })
-o.bind("SUPER + SHIFT + V", "Browse thoughts", "omarchy-shell -q omathought toggleBrowse")
-```
+1. Click **Hold to capture**, then press the key you want to hold while
+   speaking. A bare `F10` is fine here — it sits next to Voxtype's own `F9`,
+   and a bare key is far easier to hold than a chord.
+2. Click **Browse notes** and press a combination for the note list. This one
+   needs a modifier.
 
-Check the keys are free on your system before binding them —
+That is the whole setup. Omathought writes both bindings itself and reloads
+Hyprland; you never edit a config file. Click a row again to change a key,
+right-click to clear one, or **Remove key bindings** to clear both. The bar
+icon keeps working either way, so unbinding can never strand you.
+
+Pick keys that are free on your system — check with
 `omarchy menu keybindings --print`. `Super+V` is *not* free: it is Omarchy's
 Universal paste.
 
-The two `F10` lines are the whole push-to-talk mechanism. The second one, with
-`release = true`, is what makes it hold-to-talk instead of a toggle; without it
-recording never stops.
+### What it writes
+
+Bindings go into one managed block in `~/.config/hypr/bindings.lua`:
+
+```lua
+-- BEGIN com.github.marvreichmann.omathought
+o.bind("F10", "Capture a thought", "omarchy-shell -q omathought captureStart")
+o.bind("F10", "Capture a thought (release)", "omarchy-shell -q omathought captureStop", { release = true })
+o.bind("SUPER + SHIFT + V", "Browse thoughts", "omarchy-shell -q omathought toggleBrowse")
+-- END com.github.marvreichmann.omathought
+```
+
+Nothing outside that block is touched. The first write takes a one-time backup
+alongside the file, writes atomically, and restores the original if `hyprctl`
+reports a configuration error that was not there before.
+
+The two `F10` lines are the push-to-talk mechanism, and both are always written
+together: the second one, with `release = true`, is what makes the key
+hold-to-talk instead of a toggle. Written alone, the first would record forever.
+
+If you would rather paste them yourself, `omathought keys` prints the block and
+never touches the file.
 
 ## Remove
+
+Clear the bindings from the panel first (**Remove key bindings**), then:
 
 ```sh
 omarchy plugin remove com.github.marvreichmann.omathought
 ```
 
-Then delete the three `o.bind` lines from `~/.config/hypr/bindings.lua` and
-reload with `hyprctl reload`. Removing the plugin does not unbind them, and a
-binding left pointing at an absent plugin does nothing silently.
+If you remove the plugin without clearing them, delete the
+`-- BEGIN com.github.marvreichmann.omathought` ... `-- END` block from
+`~/.config/hypr/bindings.lua` by hand and run `hyprctl reload`. A binding left
+pointing at an absent plugin does nothing, silently.
 
 Your notes are left alone — Omathought never deletes the notes directory. To
-remove them too:
-
-```sh
-rm -rf ~/Documents/Thoughts                          # or your own notesDir
-rm -f ~/.local/state/omarchy/settings/omathought.json
-```
+remove them too, delete the directory `omathought dir` prints (by default
+`~/Documents/Thoughts`) and the settings file at
+`~/.local/state/omarchy/settings/omathought.json`.
 
 Nothing else is touched: no packages are installed, no services registered, and
 Voxtype's own configuration is never modified.
@@ -120,9 +148,14 @@ lands in its text field as ordinary keystrokes — which is also why it is
 editable the moment it arrives, and why nothing had to be reconfigured in
 Voxtype to redirect its output.
 
-The plugin is one `keepLoaded` overlay hosting both surfaces. `keepLoaded`
-is load-bearing rather than an optimization: the key-release binding calls into
-the plugin, and only a plugin the shell has already mounted can be called.
+The plugin is one `keepLoaded` overlay hosting both surfaces, plus a bar widget
+whose panel owns setup. `keepLoaded` is load-bearing rather than an
+optimization: the key-release binding calls into the plugin, and only a plugin
+the shell has already mounted can be called.
+
+The bar icon exists for the same reason the panel does. A plugin cannot ship a
+Hyprland binding, so a fresh install has no key to press — and without an icon
+it would have no surface at all, which is indistinguishable from being broken.
 
 ## Terminal use
 
@@ -133,6 +166,8 @@ bin/omathought list                    # every note as JSON
 bin/omathought save "a thought"        # write one, print its id
 bin/omathought body <id>               # print one note
 bin/omathought delete <id>
+bin/omathought keys                    # print the bindings to paste
+bin/omathought keys --check            # exit 0 if they are wired up
 ```
 
 ## License
