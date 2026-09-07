@@ -275,6 +275,9 @@ Panel {
 
     readonly property string chord: row.slot === "capture" ? root.captureChord : root.browseChord
     readonly property bool listening: root.recording === row.slot
+    // A row is a button, and the only clue it is one used to be that it happens
+    // to sit under the cursor. `hot` drives every affordance below.
+    readonly property bool hot: hover.hovered || row.listening
 
     implicitHeight: rowColumn.implicitHeight + Style.spacing.md * 2
     height: implicitHeight
@@ -282,16 +285,26 @@ Panel {
     BorderSurface {
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: row.listening ? Util.alpha(Color.accent, 0.12)
-                           : (row.chord === "" ? Util.alpha(root.urgent, 0.08) : Style.normalFill)
-      borderSpec: Border.controlSpec(row.listening ? "selected" : "normal",
+      color: row.listening
+        ? Style.selectedFillFor(root.foreground, Color.accent)
+        : (row.hot ? Style.hoverFillFor(row.chord === "" ? root.urgent : root.foreground, Color.accent)
+                   : (row.chord === "" ? Util.alpha(root.urgent, 0.08)
+                                       : Style.normalFillFor(root.foreground, Color.accent)))
+      borderSpec: Border.controlSpec(row.listening ? "selected" : (row.hot ? "hover-cursor" : "normal"),
                                      row.chord === "" ? root.urgent : root.foreground,
                                      Color.accent)
+
+      Behavior on color {
+        ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+      }
     }
+
+    HoverHandler { id: hover }
 
     MouseArea {
       anchors.fill: parent
       acceptedButtons: Qt.LeftButton | Qt.RightButton
+      cursorShape: Qt.PointingHandCursor
       onClicked: function (mouse) {
         if (mouse.button === Qt.RightButton) { root.clearChord(row.slot); return }
         if (row.listening) root.cancelRecording()
@@ -320,14 +333,42 @@ Panel {
           font.pixelSize: Style.font.bodySmall
         }
 
-        Text {
+        // The bound key, and under the cursor the action that replaces it. The
+        // chord itself stays put and only dims, so the row does not reflow and
+        // the value never disappears from under the pointer.
+        Row {
           anchors.right: parent.right
-          textFormat: Text.PlainText
-          text: row.listening ? "Press a key..." : root.label(row.chord)
-          color: row.listening ? Color.accent
-                               : (row.chord === "" ? root.urgent : root.foreground)
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
+          spacing: Style.spacing.sm
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            visible: row.hot && !row.listening
+            opacity: visible ? 1 : 0
+            text: row.chord === "" ? "click to set" : "click to change"
+            color: Color.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+
+            Behavior on opacity {
+              NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: row.listening ? "Press a key..." : root.label(row.chord)
+            color: row.listening ? Color.accent
+                                 : (row.chord === "" ? root.urgent : root.foreground)
+            opacity: (row.hot && !row.listening) ? 0.55 : 1.0
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+
+            Behavior on opacity {
+              NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+          }
         }
       }
 
@@ -335,10 +376,19 @@ Panel {
         width: parent.width
         wrapMode: Text.Wrap
         textFormat: Text.PlainText
-        text: row.listening ? "Esc cancels." : row.detail
-        color: root.dim
+        // Hovering swaps the description for the two things the row responds
+        // to. Right-click is otherwise undiscoverable.
+        text: row.listening
+          ? "Esc cancels."
+          : (row.hot && row.chord !== "" ? "Click to record a new key, right-click to clear it."
+                                         : row.detail)
+        color: row.listening || row.hot ? Qt.darker(root.foreground, 1.25) : root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
+
+        Behavior on color {
+          ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+        }
       }
     }
   }
