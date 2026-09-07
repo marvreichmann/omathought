@@ -245,20 +245,43 @@ Panel {
 
         PanelSeparator { width: parent.width }
 
-        Row {
+        Item {
           width: parent.width
-          spacing: Style.spacing.sm
+          height: actions.implicitHeight
 
-          Button {
-            text: "Browse notes"
-            bordered: true
-            onClicked: root.run("browse")
+          Row {
+            id: actions
+            anchors.left: parent.left
+            spacing: Style.spacing.sm
+
+            Button {
+              text: "Browse notes"
+              bordered: true
+              enabled: !root.busy
+              onClicked: root.run("browse")
+            }
+
+            Button {
+              text: "Capture now"
+              bordered: true
+              enabled: !root.busy
+              onClicked: root.run("captureStart")
+            }
           }
 
+          // Right-click on a row clears one key, but nothing announced that.
+          // This is the discoverable version, and it says "keys" rather than
+          // "notes" because removing a binding never touches a note.
           Button {
-            text: "Capture now"
+            anchors.right: parent.right
+            anchors.verticalCenter: actions.verticalCenter
+            text: "Remove keys"
             bordered: true
-            onClicked: root.run("captureStart")
+            enabled: !root.busy && (root.captureChord !== "" || root.browseChord !== "")
+            foreground: root.urgent
+            accent: root.urgent
+            tooltipText: "Unbind both keys. The bar icon still opens this panel."
+            onClicked: root.clearChord("all")
           }
         }
       }
@@ -285,13 +308,20 @@ Panel {
     BorderSurface {
       anchors.fill: parent
       radius: Style.cornerRadius
+      // The resting-to-hover step for a set row is the whole point here. The
+      // system's normal and hover fills are 4% and 8%, which is invisible on a
+      // dark panel, so hover borrows the *selected* weight instead and leaves
+      // the accent tint to mark the row that is actually listening.
       color: row.listening
-        ? Style.selectedFillFor(root.foreground, Color.accent)
-        : (row.hot ? Style.hoverFillFor(row.chord === "" ? root.urgent : root.foreground, Color.accent)
+        ? Util.alpha(Color.accent, 0.18)
+        : (row.hot ? Style.selectedFillFor(root.foreground, Color.accent)
                    : (row.chord === "" ? Util.alpha(root.urgent, 0.08)
                                        : Style.normalFillFor(root.foreground, Color.accent)))
-      borderSpec: Border.controlSpec(row.listening ? "selected" : (row.hot ? "hover-cursor" : "normal"),
-                                     row.chord === "" ? root.urgent : root.foreground,
+      // "selected" carries a zero border width in this theme, so a hovered or
+      // listening row keeps the hover-cursor border and changes only its tint.
+      borderSpec: Border.controlSpec(row.hot ? "hover-cursor" : "normal",
+                                     row.listening ? Color.accent
+                                                   : (row.chord === "" ? root.urgent : root.foreground),
                                      Color.accent)
 
       Behavior on color {

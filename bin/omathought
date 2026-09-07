@@ -12,13 +12,17 @@
 #   omathought delete <id>          remove a note
 #   omathought keys                 print the keybindings to add to Hyprland
 #   omathought keys --check         exit 0 if they are wired up, 1 if not
+#   omathought keys --set <slot> <chord>   bind capture or browse
+#   omathought keys --clear <slot|all>     unbind one or both
 #
 # Text arrives as a single argv element, never on stdin and never through a
 # shell string, so a dictated "rm -rf" is just words.
 #
-# This script never edits Hyprland's configuration. Choosing a key is the user's
-# call — which combinations are free differs per machine — so `keys` prints the
-# lines and the user pastes them.
+# `keys` is the only part that touches Hyprland's configuration, and only when
+# asked: it rewrites a single BEGIN/END block in bindings.lua, behind a one-time
+# backup, and restores the original if hyprctl reports a config error that was
+# not there before. Which combinations are free differs per machine, so the key
+# itself is always the user's choice — this script never picks one.
 
 set -euo pipefail
 
@@ -201,9 +205,9 @@ cmd_list() {
 
 # ---------------------------------------------------------------- keybindings
 
-# Omathought has no bar widget: without a keybinding there is nothing to click
-# and nothing to see, so an unbound install looks like a broken one. Everything
-# below exists to make that state visible and fixable.
+# The bar panel drives all of this. A plugin cannot ship a Hyprland binding, so
+# the keys have to be recorded from the user and written here; `--json` is what
+# the panel renders, and `--check` is the terminal equivalent.
 
 # A method is wired up if any Hyprland config file calls it on this plugin's IPC
 # target. Matching the call rather than a marker comment means a hand-written
@@ -329,7 +333,16 @@ cmd_keys() {
   # drops the other.
   if [[ ${1-} == --set || ${1-} == --clear ]]; then
     local action=$1 slot=${2-} chord=${3-}
-    [[ $slot == capture || $slot == browse ]] || die "slot must be 'capture' or 'browse'"
+
+    # `all` exists so removing both keys is one write, one backup check and one
+    # reload — clearing them in sequence would race the second write against the
+    # first one's reload.
+    if [[ $action == --clear && $slot == all ]]; then
+      write_block "" ""
+      return 0
+    fi
+
+    [[ $slot == capture || $slot == browse ]] || die "slot must be 'capture', 'browse' or 'all'"
 
     if [[ $action == --set ]]; then
       [[ -n $chord ]] || die "--set needs a key combination"
