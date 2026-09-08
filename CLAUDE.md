@@ -233,8 +233,24 @@ does **not** check what the marketplace listing needs:
 - `README.md`, `LICENSE` and `preview.png` at the repository root.
 - `homepage` pointing at the public repository.
 
-`preview.png` is still missing — capture the browser panel and the capture card
-together before the first release.
+`preview.png` shows all three surfaces — browser, setup panel, capture card —
+composited onto a flat ground at native 1:1 pixels rather than shipped as a
+desktop screenshot. Re-shooting it has three traps:
+
+- **Crop to the surface's own border, not inside it.** The overlay surfaces
+  border in `Color.menu.border`; the bar panel borders in the theme accent. A
+  crop two pixels tight silently drops one and the surfaces stop matching.
+- **The browser is a full-height sidebar** (490×2150 here), most of it empty.
+  Cut a band out of the *empty* stretch between the last note and the footer —
+  never crop through the list, which is what made the 1.0 image look faded.
+- **The panel cannot be opened from the CLI.** It is a bar popup with
+  `manageIpc: false`, and `shell summon` routes to the overlay because the
+  plugin also declares that kind. Adding an `ipcTarget` does not help: the shell
+  logs a plugin reload but does not re-instantiate bar widgets, so the target
+  never registers. Click the bar icon.
+
+Seed a demo library first so the browser shows every grouping rule, and delete
+it afterwards — the notes directory is the user's real one.
 
 ## Releasing
 
