@@ -1,2 +1,5 @@
 node_modules/
 *.log
+# Local development notes; `omarchy plugin add` clones the whole repo, so
+# anything tracked here ships inside every install.
+CLAUDE.md
