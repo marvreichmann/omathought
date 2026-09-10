@@ -51,9 +51,15 @@ Testing the QML requires copying everything to the installed location, whose
 folder name must match `manifest.json`'s `id`:
 
 ```sh
-cp manifest.json *.qml Model.js README.md LICENSE bin/omathought \
-  ~/.config/omarchy/plugins/com.github.marvreichmann.omathought/
+D=~/.config/omarchy/plugins/com.github.marvreichmann.omathought
+mkdir -p "$D/bin"
+cp manifest.json *.qml Model.js README.md LICENSE "$D"/
+cp bin/omathought "$D"/bin/
 ```
+
+The helper has to land in `bin/`: `Overlay.qml` and `Panel.qml` resolve
+`bin/omathought` relative to themselves, so a copy at the plugin root is
+never found and every list, save and edit fails.
 
 **Never `cp -a` into the plugin directory.** `-a` preserves the source mtime,
 and Qt's compiled-QML disk cache keys on mtime: the shell then reuses a stale
