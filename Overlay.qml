@@ -24,14 +24,11 @@ Item {
 
   readonly property string pluginId: (manifest && manifest.id) || "com.github.marvreichmann.omathought"
 
-  // Resolved on call rather than held as a binding. `manifest` is injected by
-  // the loader after construction, and a derived binding read from inside
-  // `onManifestChanged` can still observe the pre-change value — which yielded
-  // a bare "/bin/omathought", a silent exit 127, and a plugin that reported its
-  // own keybindings missing while they were sitting there working.
+  // Resolved relative to this file, never from `manifest.__sourceDir`: since
+  // Omarchy 4.0.3 the shell strips that field from third-party manifests, which
+  // left a bare "/bin/omathought" — exit 127, and every save silently failing.
   function helperPath() {
-    var dir = (manifest && manifest.__sourceDir) || ""
-    return dir + "/bin/omathought"
+    return Qt.resolvedUrl("bin/omathought").toString().replace("file://", "")
   }
 
   // ------------------------------------------------------------- capture

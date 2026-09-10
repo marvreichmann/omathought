@@ -6,6 +6,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-10
+
+### Fixed
+
+- Nothing could be saved on Omarchy 4.0.3 or later: `Ctrl+Enter` left the
+  capture card open, the browser showed no notes, and edits were lost.
+  Omarchy 4.0.3 stopped telling plugins where they are installed; Omathought
+  now finds its helper script on its own.
+
 ## [1.0.0] - 2026-09-08
 
 First release.
@@ -45,5 +54,6 @@ block, and restore the original if `hyprctl` reports a configuration error that
 was not there before. Nothing else on the system is modified: no packages, no
 services, and none of Voxtype's own configuration.
 
-[Unreleased]: https://github.com/marvreichmann/omathought/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/marvreichmann/omathought/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/marvreichmann/omathought/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/marvreichmann/omathought/releases/tag/v1.0.0

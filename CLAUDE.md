@@ -64,8 +64,15 @@ property the current file does not assign. `touch` on the installed files clears
 it. To empty a poisoned cache, remove the files under
 `~/.cache/quickshell/qmlcache` and restart the shell.
 
-The shell watches local plugins and reloads on change, but a failed load is not
-retried until a full rescan, so after fixing a QML syntax error:
+The shell watches local plugins and logs a reload on change, but **do not trust
+that reload for `Overlay.qml`**: the running overlay can keep serving the IPC
+target with the old code — a debug build installed this way logged nothing
+while the surface opened and took keys. Before believing a test of the
+overlay, restart the shell (`omarchy-restart-shell`; it refuses while the
+session is locked).
+
+A failed load is not retried until a full rescan, so after fixing a QML
+syntax error:
 
 ```sh
 omarchy-shell shell rescanPlugins
@@ -158,11 +165,10 @@ Five files, and the split is about what can be tested:
   refused, not sanitized.
 - An edit that empties a note is refused rather than saved. Silently turning a
   save into a delete is the one destructive thing the editor could do.
-- `helperPath()` is a function, not a derived property. `manifest` is injected
-  after construction, and a binding derived from it, read inside
-  `onManifestChanged`, still observes the pre-change value — which resolved to a
-  bare `/bin/omathought`, exited 127, and made the plugin report its own working
-  keybindings missing.
+- `helperPath()` resolves `bin/omathought` with `Qt.resolvedUrl`, never from
+  the manifest. Since Omarchy 4.0.3 a third-party plugin's manifest no longer
+  carries `__sourceDir`; reading it resolved to a bare `/bin/omathought`, exited
+  127, and every list, save and edit failed silently — `Ctrl+Enter` looked dead.
 - The panel never edits `bindings.lua` outside its `BEGIN`/`END` block, takes a
   single backup before the first write, and reverts if `hyprctl configerrors`
   reports something new. Chords are validated against a strict shape before
@@ -174,11 +180,11 @@ Five files, and the split is about what can be tested:
   `shell`, `manifest`, `omarchyPath` (and `service`, if the plugin declares one)
   into. It is expected to define `open(payloadJson)`, `close()` and `toggle()`.
   `omarchy-shell shell summon <id> '<json>'` routes its payload to `open`.
-- **`manifest.__sourceDir`** is the plugin's own directory on disk, stamped in by
-  `PluginRegistry`. It is the only way to find bundled files like `bin/`, and it
-  is injected *after* construction — see the invariant about `helperPath()`.
-  Bar-hosted components are never given it at all, so `Panel.qml` resolves the
-  helper with `Qt.resolvedUrl` instead.
+- **`manifest.__sourceDir` is not available to third-party plugins.** Since
+  Omarchy 4.0.3, `publicPluginManifest()` in the shell strips it (and every
+  other `__` field) before injecting the manifest. Find bundled files like
+  `bin/` relative to the QML file with `Qt.resolvedUrl`, as both `Overlay.qml`
+  and `Panel.qml` do.
 - **A bar popup is a `Panel` wrapping a `KeyboardPanel` wrapping a
   `PanelKeyCatcher`.** `KeyboardPanel` alone has no `moduleName`, `ipcTarget`,
   `opened` or `toggle`, so a widget's `panelLoader.item.toggle()` finds nothing
