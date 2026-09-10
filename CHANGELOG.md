@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-10
+
+### Removed
+
+- The repository's development notes (`CLAUDE.md`) no longer ship inside the
+  installed plugin. Nothing about how Omathought works has changed.
+
 ## [1.0.1] - 2026-09-10
 
 ### Fixed
@@ -54,6 +61,7 @@ block, and restore the original if `hyprctl` reports a configuration error that
 was not there before. Nothing else on the system is modified: no packages, no
 services, and none of Voxtype's own configuration.
 
-[Unreleased]: https://github.com/marvreichmann/omathought/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/marvreichmann/omathought/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/marvreichmann/omathought/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/marvreichmann/omathought/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/marvreichmann/omathought/releases/tag/v1.0.0

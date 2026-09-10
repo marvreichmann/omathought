@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "com.github.marvreichmann.omathought",
   "name": "Omathought",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Marvin Reichmann",
   "license": "MIT",
   "description": "Hold a key, speak a thought, keep it. Push-to-talk voice memos captured by Voxtype into a browsable note library.",
