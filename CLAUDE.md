@@ -269,4 +269,6 @@ section — the file is the source, the release is a copy. To cut one:
    `## [Unreleased]`, and update the link definitions at the bottom.
 3. Bump `version` in `manifest.json` to match. The workflow refuses a tag that
    disagrees.
-4. Commit, then `git tag vx.y.z && git push origin main --follow-tags`.
+4. Commit, then `git tag -a vx.y.z -m vx.y.z && git push origin main --follow-tags`.
+   The tag must be annotated: `--follow-tags` silently skips a lightweight
+   one, leaving `main` pushed and no release.
