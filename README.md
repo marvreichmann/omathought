@@ -1,5 +1,7 @@
 # Omathought
 
+[![Built for Omarchy: Plugin](https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg)](https://github.com/tcballard/omarchy-badges)
+
 Hold a key, say the thing, let go. The thought is a file before you have
 finished deciding whether it was worth keeping.
 
