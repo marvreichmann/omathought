@@ -283,3 +283,14 @@ function captureStatus(phase, hasText) {
   if (hasText) return "Ctrl+Enter to save · Esc to discard"
   return "Nothing captured · Esc to close"
 }
+
+// ------------------------------------------------------------------ summon
+
+// Which surface a shell summon opens. The shell summons with "{}" when it has
+// nothing to say (a bar panel hotkey, `omarchy-shell shell toggle`), and that
+// must not switch the microphone on: capture is opt-in, browsing is the default.
+function summonMode(payloadJson) {
+  var payload = null
+  try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = null }
+  return payload && payload.mode === "capture" ? "capture" : "browse"
+}

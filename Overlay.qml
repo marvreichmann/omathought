@@ -98,10 +98,8 @@ Item {
 
   // The shell calls these; `summon` routes its payload to open().
   function open(payloadJson) {
-    var payload = ({})
-    try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
-    if (payload.mode === "browse") root.openBrowser()
-    else root.startCapture()
+    if (Model.summonMode(payloadJson) === "capture") root.startCapture()
+    else root.openBrowser()
   }
 
   // The host's hide: it already dropped the open flag, so no releaseIfIdle.
