@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Closing Omathought from the shell (`omarchy-shell shell hide`, or a second
+  press of a bar panel hotkey) hid the capture card but left Voxtype
+  recording. It now cancels the recording, as `Esc` does.
+
 ## [1.0.2] - 2026-09-10
 
 ### Removed

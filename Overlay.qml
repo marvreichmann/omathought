@@ -104,8 +104,9 @@ Item {
     else root.startCapture()
   }
 
+  // The host's hide: it already dropped the open flag, so no releaseIfIdle.
   function close() {
-    root.captureOpen = false
+    root.endCapture()
     root.browseOpen = false
   }
 
@@ -174,6 +175,11 @@ Item {
   }
 
   function dismissCapture() {
+    root.endCapture()
+    root.releaseIfIdle()
+  }
+
+  function endCapture() {
     // A card closed mid-recording must not leave the daemon listening, and the
     // audio is discarded rather than transcribed into nothing.
     if (root.phase === "recording" || root.phase === "transcribing") recordCancel.running = true
@@ -182,7 +188,6 @@ Item {
     root.captureOpen = false
     root.phase = "idle"
     root.draft = ""
-    root.releaseIfIdle()
   }
 
   // ============================================================== browsing
