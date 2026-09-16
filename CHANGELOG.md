@@ -11,6 +11,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Closing Omathought from the shell (`omarchy-shell shell hide`, or a second
   press of a bar panel hotkey) hid the capture card but left Voxtype
   recording. It now cancels the recording, as `Esc` does.
+- A bar panel hotkey (`Super+Ctrl+<n>`) or `omarchy-shell shell toggle` on
+  Omathought switched the microphone on. A summon now opens the note browser
+  unless its payload asks for `{"mode":"capture"}`; the capture keybinding is
+  unchanged.
 
 ## [1.0.2] - 2026-09-10
 

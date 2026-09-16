@@ -272,3 +272,13 @@ test("captureStatus describes each phase of a capture", () => {
   assert.match(Model.captureStatus("ready", true), /Ctrl\+Enter/)
   assert.match(Model.captureStatus("ready", false), /Nothing captured/)
 })
+
+test("summonMode captures only when the payload asks for it", () => {
+  assert.equal(Model.summonMode('{"mode":"capture"}'), "capture")
+  assert.equal(Model.summonMode('{"mode":"browse"}'), "browse")
+  assert.equal(Model.summonMode("{}"), "browse")
+  assert.equal(Model.summonMode(""), "browse")
+  assert.equal(Model.summonMode(undefined), "browse")
+  assert.equal(Model.summonMode("not json"), "browse")
+  assert.equal(Model.summonMode("null"), "browse")
+})
